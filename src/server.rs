@@ -166,6 +166,7 @@ pub async fn serve(config: ServerConfig) -> anyhow::Result<()> {
         .route("/processes", get(list_processes))
         .route("/processes/:pid/maps", get(list_maps))
         .route("/processes/:pid/resolve", get(resolve_address))
+        .merge(crate::memory_api::routes())
         .with_state(state)
         .layer(middleware::from_fn(add_cors_headers));
 
@@ -600,7 +601,7 @@ fn now_ms() -> u128 {
         .unwrap_or_default()
 }
 
-fn error_response(status: StatusCode, error: impl ToString) -> axum::response::Response {
+pub(crate) fn error_response(status: StatusCode, error: impl ToString) -> axum::response::Response {
     (
         status,
         Json(ErrorBody {

@@ -12,6 +12,8 @@ mod maps;
 mod perf;
 mod server;
 mod watch;
+mod lk1337;
+mod memory_api;
 
 #[derive(Parser)]
 #[command(author, version, about)]
