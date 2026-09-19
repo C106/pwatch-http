@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disassembly smoke test</title>
+<style>body { margin: 0; } iframe { width: 100%; height: 100vh; border: 0; } #result { position: fixed; z-index: 1; right: 8px; top: 0; background: #fff; color: #111; }</style>
+<pre id="result">RUNNING</pre>
+<iframe title="Dashboard test"></iframe>
+<script>
+  function mockApi() {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async function (url, options) {
+      const u = new URL(url, location.href);
+      if (u.pathname.endsWith(".wasm")) return nativeFetch(url, options);
+      let data = [];
+      if (u.pathname === "/memory/read") {
+        const size = Number(u.searchParams.get("size"));
+        const addr = u.searchParams.get("addr");
+        const bytes = BigInt(addr) >= 0xffffffffff000000n ? [0x48, 0x89, 0xe5, 0xc3] : [0x1f, 0x20, 0x03, 0xd5];
+        data = { pid: Number(u.searchParams.get("pid")), addr, size, data: Array.from({ length: size }, (_, i) => bytes[i % bytes.length]) };
+      } else if (u.pathname.endsWith("/maps")) {
+        data = [{ start: "0x20000000000000", end: "0x20000000000204", perms: "r-xp", offset: "0x0", pathname: "/test.so" }];
+      } else if (u.pathname === "/hits") {
+        data = [{ seq: 1, pid: 42, tid: 42, breakpoint_id: 1, timestamp_ms: 0, regs: [{ name: "ip", value: "0xffffffffff000000" }] }];
+      } else if (u.pathname === "/processes") {
+        data = [{ pid: 42, comm: "test" }];
+      }
+      return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
+    };
+    window.EventSource = class { static OPEN = 1; readyState = 1; addEventListener() {} close() {} };
+  }
+  (async () => {
+    const frame = document.querySelector("iframe");
+    const html = await (await fetch("../index.html")).text();
+    const base = new URL("../", location.href).href;
+    const loaded = new Promise(resolve => frame.onload = resolve);
+    frame.srcdoc = html.replace("<head>", `<head><base href="${base}"><script>(${mockApi.toString()})();<\/script>`);
+    await loaded;
+    const w = frame.contentWindow;
+    const d = frame.contentDocument;
+    const $ = selector => d.querySelector(selector);
+    const check = (condition, message) => { if (!condition) throw new Error(message); };
+    async function waitFor(condition) {
+      for (let i = 0; i < 200; i++) {
+        if (condition()) return;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      throw new Error(`Timed out: ${$("#disasmStatus").textContent}`);
+    }
+    await waitFor(() => $("#processList button"));
+    $("#processList button").click();
+    await waitFor(() => $("#mapsBody .inspect-actions"));
+    $("#mapsBody .inspect-actions button:last-child").click();
+    await waitFor(() => $("#disasmRows tr"));
+    check($("#disasmRows td:nth-child(3)").textContent === "nop", "ARM64 decode");
+    check($("#disasmRows td").textContent === "0x0020000000000000", "64-bit address");
+    $("#disasmNext").click();
+    await waitFor(() => $("#disasmRows tr") && !$("#disasmRead").disabled);
+    check($("#disasmAddr").value === "0x0020000000000100", "Next page");
+    $("#disasmPrev").click();
+    await waitFor(() => $("#disasmRows tr") && !$("#disasmRead").disabled);
+    check($("#disasmAddr").value === "0x0020000000000000", "Previous page");
+    $("#disasmRefresh").click();
+    await waitFor(() => $("#disasmRows tr") && !$("#disasmRead").disabled);
+    $("#hitsList .hit-title button").click();
+    await waitFor(() => $("#disasmRows tr") && !$("#disasmRead").disabled);
+    check($("#disasmArch").value === "x86_64", "Hit architecture");
+    check($("#disasmRows td:nth-child(4)").textContent === "rbp, rsp", "Intel syntax");
+    $("#disasmRows button").click();
+    check($("#type").value === "x" && $("#addr").value === "0xffffffffff000000", "Breakpoint preparation");
+    check(d.documentElement.scrollWidth <= w.innerWidth, "No viewport overflow");
+    $("#disasmTab").scrollIntoView();
+    document.querySelector("#result").textContent = "PASS: Maps, Hits, ARM64, x86-64, paging, breakpoint, layout";
+  })().catch(error => { document.querySelector("#result").textContent = `FAIL: ${error.stack}`; });
+</script>

@@ -49,6 +49,15 @@ const els = {
 
 els.apiBase.value = state.apiBase;
 const memoryView = MemoryView.create(document, api);
+const disassemblyView = DisassemblyView.create(document, api, undefined, {
+  breakpoint(pid, addr) {
+    els.pid.value = pid;
+    els.addr.value = addr;
+    els.type.value = "x";
+    els.addr.focus();
+    els.form.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  },
+});
 
 els.connectBtn.addEventListener("click", connect);
 els.refreshBtn.addEventListener("click", refreshAll);
@@ -121,6 +130,7 @@ async function api(path, options = {}) {
 
 async function connect() {
   memoryView.reset();
+  disassemblyView.reset();
   state.apiBase = els.apiBase.value.trim() || "http://127.0.0.1:8080";
   localStorage.setItem("pwatch.apiBase", state.apiBase);
   closeStream();
@@ -391,6 +401,7 @@ function renderProcesses() {
       els.pid.value = process.pid;
       els.mapsPid.value = process.pid;
       memoryView.setPid(process.pid);
+      disassemblyView.setPid(process.pid);
       loadMaps().catch((error) => showError(error.message));
       closeProcessPopup();
       els.addr.focus();
@@ -479,6 +490,16 @@ function renderMaps() {
       memoryView.open(els.mapsPid.value, map.start, map.end);
     });
     action.append(open);
+    const disasm = document.createElement("button");
+    disasm.type = "button";
+    disasm.className = "secondary compact";
+    disasm.textContent = "Disassemble";
+    disasm.addEventListener("click", () => {
+      setActiveTab("disasm");
+      disassemblyView.open(els.mapsPid.value, map.start, map.end);
+    });
+    action.className = "inspect-actions";
+    action.append(disasm);
     row.append(action);
     els.mapsBody.append(row);
   }
@@ -576,6 +597,19 @@ function renderHitCard(hit, count) {
     meta.className = "hit-meta";
     meta.textContent = new Date(Number(hit.timestamp_ms)).toLocaleString();
     top.append(title, meta);
+    const pc = (hit.regs || []).find(reg => ["pc", "ip", "rip"].includes(reg.name.toLowerCase()));
+    if (pc) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary compact";
+      button.textContent = "Disassemble";
+      button.title = `Disassemble ${pc.value}`;
+      button.addEventListener("click", () => {
+        setActiveTab("disasm");
+        disassemblyView.open(hit.pid, pc.value, null, pc.name.toLowerCase() === "pc" ? "arm64" : "x86_64");
+      });
+      title.append(button);
+    }
 
     const regs = document.createElement("div");
     regs.className = "reg-grid";
@@ -615,6 +649,7 @@ function renderReg(reg) {
 
 function setActiveTab(tabName) {
   if (tabName === "memory") memoryView.usePidIfEmpty(els.pid.value || els.mapsPid.value);
+  if (tabName === "disasm") disassemblyView.usePidIfEmpty(els.pid.value || els.mapsPid.value);
   state.activeTab = tabName;
   els.tabs.forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.tab === tabName);

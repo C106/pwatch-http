@@ -95,6 +95,7 @@
           <button class="tab" type="button" data-tab="hits">Hits</button>
           <button class="tab" type="button" data-tab="maps">Maps</button>
           <button class="tab" type="button" data-tab="memory">Memory</button>
+          <button class="tab" type="button" data-tab="disasm">Disassembly</button>
         </section>
 
         <section id="breakpointsTab" class="tab-panel active">
@@ -182,7 +183,7 @@
                   <th>Perms</th>
                   <th>Offset</th>
                   <th>Path</th>
-                  <th>Memory</th>
+                  <th>Inspect</th>
                 </tr>
               </thead>
               <tbody id="mapsBody"></tbody>
@@ -213,6 +214,29 @@
             </table>
           </div>
         </section>
+        <section id="disasmTab" class="tab-panel">
+          <div class="toolbar"><h2>Disassembly</h2></div>
+          <form id="disasmForm" class="memory-controls">
+            <label>PID<input id="disasmPid" type="number" min="1" max="2147483647" required placeholder="Select process"></label>
+            <label class="memory-address-input">Address (hex)<input id="disasmAddr" type="text" required spellcheck="false" autocomplete="off" placeholder="0x7000000000"></label>
+            <label>Architecture<select id="disasmArch"><option value="arm64">ARM64 (LE)</option><option value="x86_64">x86-64 (Intel)</option></select></label>
+            <label>Page bytes<input id="disasmSize" type="number" min="1" max="4082" value="256" required></label>
+            <button id="disasmRead" type="submit">Read / Jump</button>
+          </form>
+          <div class="memory-navigation">
+            <button id="disasmPrev" class="secondary icon-button" type="button" disabled title="Previous visited page" aria-label="Previous visited page"><img src="./vendor/lucide/arrow-left.svg" alt="" width="18" height="18"></button>
+            <button id="disasmNext" class="secondary icon-button" type="button" disabled title="Next instructions" aria-label="Next instructions"><img src="./vendor/lucide/arrow-right.svg" alt="" width="18" height="18"></button>
+            <button id="disasmRefresh" class="secondary icon-button" type="button" disabled title="Refresh instructions" aria-label="Refresh instructions"><img src="./vendor/lucide/refresh-cw.svg" alt="" width="18" height="18"></button>
+          </div>
+          <p id="disasmStatus" role="status" aria-live="polite">No instructions loaded.</p>
+          <div id="disasmView" class="table-wrap memory-scroll" aria-busy="false" tabindex="0" aria-label="Disassembly table">
+            <table class="hex-table disasm-table">
+              <caption class="sr-only">Instruction addresses, bytes, mnemonics, operands and breakpoint actions</caption>
+              <thead><tr><th scope="col">Address</th><th scope="col">Bytes</th><th scope="col">Instruction</th><th scope="col">Operands</th><th scope="col">Action</th></tr></thead>
+              <tbody id="disasmRows"></tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
 
@@ -224,6 +248,8 @@
     </template>
 
     <script src="./memory-view.js"></script>
+    <script src="./disassembler.js"></script>
+    <script src="./disassembly-view.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
