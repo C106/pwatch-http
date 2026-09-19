@@ -94,6 +94,7 @@
           <button class="tab active" type="button" data-tab="breakpoints">Breakpoints</button>
           <button class="tab" type="button" data-tab="hits">Hits</button>
           <button class="tab" type="button" data-tab="maps">Maps</button>
+          <button class="tab" type="button" data-tab="memory">Memory</button>
         </section>
 
         <section id="breakpointsTab" class="tab-panel active">
@@ -181,11 +182,36 @@
                   <th>Perms</th>
                   <th>Offset</th>
                   <th>Path</th>
+                  <th>Memory</th>
                 </tr>
               </thead>
               <tbody id="mapsBody"></tbody>
             </table>
           </section>
+        </section>
+        <section id="memoryTab" class="tab-panel">
+          <div class="toolbar">
+            <div><h2>Memory Hex View</h2><p>LK1337 memory · 16 bytes per row</p></div>
+          </div>
+          <form id="memoryForm" class="memory-controls">
+            <label>PID<input id="memoryPid" type="number" min="1" max="2147483647" required placeholder="Select process"></label>
+            <label class="memory-address-input">Address (hex)<input id="memoryAddr" type="text" required spellcheck="false" autocomplete="off" placeholder="0x7000000000"></label>
+            <label>Bytes<input id="memorySize" type="number" min="1" max="4096" value="256" required></label>
+            <button id="memoryRead" type="submit">Read / Jump</button>
+          </form>
+          <div class="memory-navigation">
+            <button id="memoryPrev" class="secondary" type="button" disabled>Previous</button>
+            <button id="memoryNext" class="secondary" type="button" disabled>Next</button>
+            <button id="memoryRefresh" class="secondary" type="button" disabled>Refresh</button>
+          </div>
+          <p id="memoryStatus" role="status" aria-live="polite">Enter a PID and hexadecimal address to read memory.</p>
+          <div id="memoryView" class="table-wrap memory-scroll" aria-busy="false" tabindex="0" aria-label="Memory hex table">
+            <table class="hex-table">
+              <caption class="sr-only">Memory addresses, hexadecimal bytes and ASCII</caption>
+              <thead><tr><th scope="col">Address</th><th scope="col">00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f</th><th scope="col">ASCII</th></tr></thead>
+              <tbody id="memoryRows"></tbody>
+            </table>
+          </div>
         </section>
       </main>
     </div>
@@ -197,6 +223,7 @@
       </div>
     </template>
 
+    <script src="./memory-view.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

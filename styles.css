@@ -528,3 +528,20 @@ td code,
   box-shadow: 0 12px 28px var(--shadow);
   font-size: 13px;
 }
+
+.memory-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 14px; }
+.memory-controls label { width: 140px; }
+.memory-controls .memory-address-input { flex: 1; min-width: 240px; }
+.memory-controls button, .memory-navigation button { padding: 0 14px; }
+.memory-navigation { display: flex; gap: 8px; }
+#memoryStatus { color: var(--muted); overflow-wrap: anywhere; font-size: 13px; }
+#memoryStatus.memory-error { color: #ffb3b3; }
+.memory-scroll { overflow: auto; max-height: 65vh; }
+.hex-table { table-layout: auto; width: max-content; min-width: 100%; }
+.hex-table th, .hex-table td { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; text-transform: none; white-space: pre; text-overflow: clip; }
+.hex-table thead { position: sticky; top: 0; background: var(--surface-2); }
+.hex-table td:first-child { color: var(--accent-2); }
+.hex-table td:nth-child(2) { color: var(--text); }
+.hex-table td:last-child { color: var(--muted); }
+.hex-table tbody tr:hover { background: var(--surface-2); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

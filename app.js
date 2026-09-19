@@ -48,6 +48,7 @@ const els = {
 };
 
 els.apiBase.value = state.apiBase;
+const memoryView = MemoryView.create(document, api);
 
 els.connectBtn.addEventListener("click", connect);
 els.refreshBtn.addEventListener("click", refreshAll);
@@ -119,6 +120,7 @@ async function api(path, options = {}) {
 }
 
 async function connect() {
+  memoryView.reset();
   state.apiBase = els.apiBase.value.trim() || "http://127.0.0.1:8080";
   localStorage.setItem("pwatch.apiBase", state.apiBase);
   closeStream();
@@ -388,6 +390,7 @@ function renderProcesses() {
     item.addEventListener("click", () => {
       els.pid.value = process.pid;
       els.mapsPid.value = process.pid;
+      memoryView.setPid(process.pid);
       loadMaps().catch((error) => showError(error.message));
       closeProcessPopup();
       els.addr.focus();
@@ -450,7 +453,7 @@ function renderMaps() {
   if (maps.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 5;
+    cell.colSpan = 6;
     cell.textContent = els.mapsPid.value ? "No maps" : "Select a process";
     row.append(cell);
     els.mapsBody.append(row);
@@ -466,6 +469,17 @@ function renderMaps() {
       codeCell(map.offset),
       cell(map.pathname || "[anonymous]"),
     );
+    const action = document.createElement("td");
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "secondary compact";
+    open.textContent = "Hex";
+    open.addEventListener("click", () => {
+      setActiveTab("memory");
+      memoryView.open(els.mapsPid.value, map.start, map.end);
+    });
+    action.append(open);
+    row.append(action);
     els.mapsBody.append(row);
   }
 }
@@ -568,6 +582,9 @@ function renderHitCard(hit, count) {
     for (const reg of hit.regs) {
       regs.append(renderReg(reg));
     }
+    for (const reg of (hit.simd || [])) {
+      regs.append(renderReg(reg));
+    }
 
     card.append(top, regs);
     const backtrace = getBacktraceFrames(hit);
@@ -597,6 +614,7 @@ function renderReg(reg) {
 }
 
 function setActiveTab(tabName) {
+  if (tabName === "memory") memoryView.usePidIfEmpty(els.pid.value || els.mapsPid.value);
   state.activeTab = tabName;
   els.tabs.forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.tab === tabName);
