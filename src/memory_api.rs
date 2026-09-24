@@ -88,7 +88,7 @@ fn decode_hex(text: &str) -> Result<Vec<u8>, String> {
     let digits: Vec<u8> = text.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
     if digits.is_empty()
         || digits.len() > MAX_BYTES * 2
-        || digits.len() % 2 != 0
+        || !digits.len().is_multiple_of(2)
         || !digits.iter().all(u8::is_ascii_hexdigit)
     {
         return Err(format!(
@@ -96,7 +96,7 @@ fn decode_hex(text: &str) -> Result<Vec<u8>, String> {
         ));
     }
     Ok(digits
-        .chunks_exact(2)
+        .chunks(2)
         .map(|pair| {
             let nibble = |b: u8| {
                 if b.is_ascii_digit() {

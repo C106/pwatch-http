@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::{anyhow, Result};
 use nix::libc;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
