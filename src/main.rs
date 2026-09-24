@@ -8,12 +8,12 @@ use watch::WatchConfig;
 mod arch;
 mod filter;
 mod hit;
+mod lk1337;
 mod maps;
+mod memory_api;
 mod perf;
 mod server;
 mod watch;
-mod lk1337;
-mod memory_api;
 
 #[derive(Parser)]
 #[command(author, version, about)]
