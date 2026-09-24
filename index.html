@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>pwatch Dashboard</title>
-    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
@@ -21,11 +21,13 @@
           <h2>API</h2>
           <label>
             Endpoint
-            <input id="apiBase" type="url" spellcheck="false">
+            <input id="apiBase" type="url" spellcheck="false" />
           </label>
           <div class="button-row">
             <button id="connectBtn" type="button">Connect</button>
-            <button id="refreshBtn" class="secondary" type="button">Refresh</button>
+            <button id="refreshBtn" class="secondary" type="button">
+              Refresh
+            </button>
           </div>
           <div id="status" class="status disconnected">Disconnected</div>
         </section>
@@ -36,11 +38,29 @@
             <label>
               PID
               <div class="pid-picker">
-                <input id="pid" type="number" min="1" required placeholder="31737" autocomplete="off">
+                <input
+                  id="pid"
+                  type="number"
+                  min="1"
+                  required
+                  placeholder="31737"
+                  autocomplete="off"
+                />
                 <div id="processPopup" class="process-popup" hidden>
                   <div class="process-popup-head">
-                    <input id="processSearch" type="search" spellcheck="false" placeholder="Search process">
-                    <button id="processRefreshBtn" class="secondary compact" type="button">Refresh</button>
+                    <input
+                      id="processSearch"
+                      type="search"
+                      spellcheck="false"
+                      placeholder="Search process"
+                    />
+                    <button
+                      id="processRefreshBtn"
+                      class="secondary compact"
+                      type="button"
+                    >
+                      Refresh
+                    </button>
                   </div>
                   <div id="processCount" class="subtle-count">0 processes</div>
                   <div id="processList" class="process-list"></div>
@@ -68,34 +88,48 @@
               </label>
               <label>
                 Buffer
-                <input id="bufSize" type="number" min="0" max="16" value="0">
+                <input id="bufSize" type="number" min="0" max="16" value="0" />
               </label>
             </div>
             <label>
               Address
-              <input id="addr" type="text" spellcheck="false" required placeholder="0x55fa689a90 or libUE4.so + 0x1234">
+              <input
+                id="addr"
+                type="text"
+                spellcheck="false"
+                required
+                placeholder="0x55fa689a90 or libUE4.so + 0x1234"
+              />
             </label>
             <label>
               Filter
-              <input id="filter" type="text" spellcheck="false" placeholder="ip == 0x1234 and ax != 0">
+              <input
+                id="filter"
+                type="text"
+                spellcheck="false"
+                placeholder="ip == 0x1234 and ax != 0"
+              />
             </label>
             <label class="checkbox">
-              <input id="backtrace" type="checkbox">
+              <input id="backtrace" type="checkbox" />
               <span>Backtrace</span>
             </label>
             <button type="submit">Create</button>
           </form>
         </section>
-
       </aside>
 
       <main class="workspace">
         <section class="tabs" role="tablist">
-          <button class="tab active" type="button" data-tab="breakpoints">Breakpoints</button>
+          <button class="tab active" type="button" data-tab="breakpoints">
+            Breakpoints
+          </button>
           <button class="tab" type="button" data-tab="hits">Hits</button>
           <button class="tab" type="button" data-tab="maps">Maps</button>
           <button class="tab" type="button" data-tab="memory">Memory</button>
-          <button class="tab" type="button" data-tab="disasm">Disassembly</button>
+          <button class="tab" type="button" data-tab="disasm">
+            Disassembly
+          </button>
         </section>
 
         <section id="breakpointsTab" class="tab-panel active">
@@ -134,7 +168,12 @@
             <div class="toolbar-actions">
               <label class="hit-search">
                 Filter hits
-                <input id="hitFilter" type="search" spellcheck="false" placeholder="address, pid, register, backtrace">
+                <input
+                  id="hitFilter"
+                  type="search"
+                  spellcheck="false"
+                  placeholder="address, pid, register, backtrace"
+                />
               </label>
               <label>
                 View
@@ -145,9 +184,17 @@
               </label>
               <label>
                 Hit limit
-                <input id="hitLimit" type="number" min="1" max="1000" value="100">
+                <input
+                  id="hitLimit"
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value="100"
+                />
               </label>
-              <button id="clearHitsBtn" class="secondary" type="button">Clear View</button>
+              <button id="clearHitsBtn" class="secondary" type="button">
+                Clear View
+              </button>
               <div id="streamState" class="pill">SSE idle</div>
             </div>
           </div>
@@ -164,13 +211,25 @@
             <div class="toolbar-actions">
               <label>
                 PID
-                <input id="mapsPid" type="number" min="1" placeholder="Select process">
+                <input
+                  id="mapsPid"
+                  type="number"
+                  min="1"
+                  placeholder="Select process"
+                />
               </label>
               <label>
                 Search
-                <input id="mapsSearch" type="search" spellcheck="false" placeholder="libUE4, /data/app, rw-p">
+                <input
+                  id="mapsSearch"
+                  type="search"
+                  spellcheck="false"
+                  placeholder="libUE4, /data/app, rw-p"
+                />
               </label>
-              <button id="mapsRefreshBtn" class="secondary" type="button">Refresh</button>
+              <button id="mapsRefreshBtn" class="secondary" type="button">
+                Refresh
+              </button>
             </div>
           </div>
 
@@ -192,25 +251,81 @@
         </section>
         <section id="memoryTab" class="tab-panel">
           <div class="toolbar">
-            <div><h2>Memory Hex View</h2><p>LK1337 memory · 16 bytes per row</p></div>
+            <div>
+              <h2>Memory Hex View</h2>
+              <p>LK1337 memory · 16 bytes per row</p>
+            </div>
           </div>
           <form id="memoryForm" class="memory-controls">
-            <label>PID<input id="memoryPid" type="number" min="1" max="2147483647" required placeholder="Select process"></label>
-            <label class="memory-address-input">Address / expression<input id="memoryAddr" type="text" required spellcheck="false" autocomplete="off" placeholder="libUE4.so + 0x1234 - 0x20" title="Address or module with + / - offsets. All numbers are hexadecimal."></label>
-            <label>Bytes<input id="memorySize" type="number" min="1" max="4096" value="256" required></label>
+            <label
+              >PID<input
+                id="memoryPid"
+                type="number"
+                min="1"
+                max="2147483647"
+                required
+                placeholder="Select process"
+            /></label>
+            <label class="memory-address-input"
+              >Address / expression<input
+                id="memoryAddr"
+                type="text"
+                required
+                spellcheck="false"
+                autocomplete="off"
+                placeholder="libUE4.so + 0x1234 - 0x20"
+                title="Address or module with + / - offsets. All numbers are hexadecimal."
+            /></label>
+            <label
+              >Bytes<input
+                id="memorySize"
+                type="number"
+                min="1"
+                max="4096"
+                value="256"
+                required
+            /></label>
             <button id="memoryRead" type="submit">Read / Jump</button>
           </form>
           <div class="memory-navigation">
-            <button id="memoryPrev" class="secondary" type="button" disabled>Previous</button>
-            <button id="memoryNext" class="secondary" type="button" disabled>Next</button>
-            <button id="memoryRefresh" class="secondary" type="button" disabled>Refresh</button>
-            <label class="checkbox memory-auto"><input id="memoryAuto" type="checkbox"><span>Auto refresh · 500ms</span></label>
+            <button id="memoryPrev" class="secondary" type="button" disabled>
+              Previous
+            </button>
+            <button id="memoryNext" class="secondary" type="button" disabled>
+              Next
+            </button>
+            <button id="memoryRefresh" class="secondary" type="button" disabled>
+              Refresh
+            </button>
+            <label class="checkbox memory-auto"
+              ><input id="memoryAuto" type="checkbox" /><span
+                >Auto refresh · 500ms</span
+              ></label
+            >
           </div>
-          <p id="memoryStatus" role="status" aria-live="polite">Enter a PID and address expression to read memory.</p>
-          <div id="memoryView" class="table-wrap memory-scroll" aria-busy="false" tabindex="0" aria-label="Memory hex table">
+          <p id="memoryStatus" role="status" aria-live="polite">
+            Enter a PID and address expression to read memory.
+          </p>
+          <div
+            id="memoryView"
+            class="table-wrap memory-scroll"
+            aria-busy="false"
+            tabindex="0"
+            aria-label="Memory hex table"
+          >
             <table class="hex-table">
-              <caption class="sr-only">Memory addresses, hexadecimal bytes and ASCII</caption>
-              <thead><tr><th scope="col">Address</th><th scope="col">00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f</th><th scope="col">ASCII</th></tr></thead>
+              <caption class="sr-only">
+                Memory addresses, hexadecimal bytes and ASCII
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Address</th>
+                  <th scope="col">
+                    00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f
+                  </th>
+                  <th scope="col">ASCII</th>
+                </tr>
+              </thead>
               <tbody id="memoryRows"></tbody>
             </table>
           </div>
@@ -218,29 +333,163 @@
         <section id="disasmTab" class="tab-panel">
           <div class="toolbar"><h2>Disassembly</h2></div>
           <form id="disasmForm" class="memory-controls">
-            <label>PID<input id="disasmPid" type="number" min="1" max="2147483647" required placeholder="Select process"></label>
-            <label class="memory-address-input">Address / expression<input id="disasmAddr" type="text" required spellcheck="false" autocomplete="off" placeholder="libUE4.so + 0x1234 - 0x20" title="Address or module with + / - offsets. All numbers are hexadecimal."></label>
-            <label>Architecture<select id="disasmArch"><option value="arm64">ARM64 (LE)</option><option value="x86_64">x86-64 (Intel)</option></select></label>
-            <label>Page bytes<input id="disasmSize" type="number" min="1" max="4082" value="256" required></label>
+            <label
+              >PID<input
+                id="disasmPid"
+                type="number"
+                min="1"
+                max="2147483647"
+                required
+                placeholder="Select process"
+            /></label>
+            <label class="memory-address-input"
+              >Address / expression<input
+                id="disasmAddr"
+                type="text"
+                required
+                spellcheck="false"
+                autocomplete="off"
+                placeholder="libUE4.so + 0x1234 - 0x20"
+                title="Address or module with + / - offsets. All numbers are hexadecimal."
+            /></label>
+            <label
+              >Architecture<select id="disasmArch">
+                <option value="arm64">ARM64 (LE)</option>
+                <option value="x86_64">x86-64 (Intel)</option>
+              </select></label
+            >
+            <label
+              >Page bytes<input
+                id="disasmSize"
+                type="number"
+                min="1"
+                max="4082"
+                value="256"
+                required
+            /></label>
             <button id="disasmRead" type="submit">Read / Jump</button>
           </form>
           <div class="memory-navigation disasm-navigation">
-            <div class="navigation-group" role="group" aria-label="Jump history">
-              <button id="disasmBack" class="secondary icon-button" type="button" disabled title="Back in jump history" aria-label="Back in jump history"><img src="./vendor/lucide/arrow-left.svg" alt="" width="18" height="18"></button>
-              <button id="disasmForward" class="secondary icon-button" type="button" disabled title="Forward in jump history" aria-label="Forward in jump history"><img src="./vendor/lucide/arrow-right.svg" alt="" width="18" height="18"></button>
+            <div
+              class="navigation-group"
+              role="group"
+              aria-label="Jump history"
+            >
+              <button
+                id="disasmBack"
+                class="secondary icon-button"
+                type="button"
+                disabled
+                title="Back in jump history"
+                aria-label="Back in jump history"
+              >
+                <img
+                  src="./vendor/lucide/arrow-left.svg"
+                  alt=""
+                  width="18"
+                  height="18"
+                />
+              </button>
+              <button
+                id="disasmForward"
+                class="secondary icon-button"
+                type="button"
+                disabled
+                title="Forward in jump history"
+                aria-label="Forward in jump history"
+              >
+                <img
+                  src="./vendor/lucide/arrow-right.svg"
+                  alt=""
+                  width="18"
+                  height="18"
+                />
+              </button>
             </div>
-            <select id="disasmHistory" aria-label="Jump history" title="Jump history" disabled><option>No jump history</option></select>
-            <div class="navigation-group page-navigation" role="group" aria-label="Instruction pages">
-            <button id="disasmPrev" class="secondary icon-button" type="button" disabled title="Previous instruction page" aria-label="Previous instruction page"><img src="./vendor/lucide/arrow-left.svg" alt="" width="18" height="18"></button>
-            <button id="disasmNext" class="secondary icon-button" type="button" disabled title="Next instructions" aria-label="Next instructions"><img src="./vendor/lucide/arrow-right.svg" alt="" width="18" height="18"></button>
+            <select
+              id="disasmHistory"
+              aria-label="Jump history"
+              title="Jump history"
+              disabled
+            >
+              <option>No jump history</option>
+            </select>
+            <div
+              class="navigation-group page-navigation"
+              role="group"
+              aria-label="Instruction pages"
+            >
+              <button
+                id="disasmPrev"
+                class="secondary icon-button"
+                type="button"
+                disabled
+                title="Previous instruction page"
+                aria-label="Previous instruction page"
+              >
+                <img
+                  src="./vendor/lucide/arrow-left.svg"
+                  alt=""
+                  width="18"
+                  height="18"
+                />
+              </button>
+              <button
+                id="disasmNext"
+                class="secondary icon-button"
+                type="button"
+                disabled
+                title="Next instructions"
+                aria-label="Next instructions"
+              >
+                <img
+                  src="./vendor/lucide/arrow-right.svg"
+                  alt=""
+                  width="18"
+                  height="18"
+                />
+              </button>
             </div>
-            <button id="disasmRefresh" class="secondary icon-button" type="button" disabled title="Refresh instructions" aria-label="Refresh instructions"><img src="./vendor/lucide/refresh-cw.svg" alt="" width="18" height="18"></button>
+            <button
+              id="disasmRefresh"
+              class="secondary icon-button"
+              type="button"
+              disabled
+              title="Refresh instructions"
+              aria-label="Refresh instructions"
+            >
+              <img
+                src="./vendor/lucide/refresh-cw.svg"
+                alt=""
+                width="18"
+                height="18"
+              />
+            </button>
           </div>
-          <p id="disasmStatus" role="status" aria-live="polite">No instructions loaded.</p>
-          <div id="disasmView" class="table-wrap memory-scroll" aria-busy="false" tabindex="0" aria-label="Disassembly table">
+          <p id="disasmStatus" role="status" aria-live="polite">
+            No instructions loaded.
+          </p>
+          <div
+            id="disasmView"
+            class="table-wrap memory-scroll"
+            aria-busy="false"
+            tabindex="0"
+            aria-label="Disassembly table"
+          >
             <table class="hex-table disasm-table">
-              <caption class="sr-only">Instruction addresses, bytes, mnemonics, operands and breakpoint actions</caption>
-              <thead><tr><th scope="col">Address</th><th scope="col">Bytes</th><th scope="col">Instruction</th><th scope="col">Operands</th><th scope="col">Action</th></tr></thead>
+              <caption class="sr-only">
+                Instruction addresses, bytes, mnemonics, operands and breakpoint
+                actions
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Address</th>
+                  <th scope="col">Bytes</th>
+                  <th scope="col">Instruction</th>
+                  <th scope="col">Operands</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
               <tbody id="disasmRows"></tbody>
             </table>
           </div>

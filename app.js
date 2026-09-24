@@ -54,15 +54,21 @@ function resolveAddressExpression(pid, expression, options = {}) {
 
 const memoryView = MemoryView.create(document, api, resolveAddressExpression);
 memoryView.setActive(false);
-const disassemblyView = DisassemblyView.create(document, api, undefined, {
-  breakpoint(pid, addr) {
-    els.pid.value = pid;
-    els.addr.value = addr;
-    els.type.value = "x";
-    els.addr.focus();
-    els.form.scrollIntoView({ block: "nearest", behavior: "smooth" });
+const disassemblyView = DisassemblyView.create(
+  document,
+  api,
+  undefined,
+  {
+    breakpoint(pid, addr) {
+      els.pid.value = pid;
+      els.addr.value = addr;
+      els.type.value = "x";
+      els.addr.focus();
+      els.form.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    },
   },
-}, resolveAddressExpression);
+  resolveAddressExpression,
+);
 
 els.connectBtn.addEventListener("click", connect);
 els.refreshBtn.addEventListener("click", refreshAll);
@@ -227,7 +233,10 @@ function openStream() {
   state.eventSource = source;
   els.streamState.textContent = "SSE connecting";
   state.streamReadyTimer = window.setTimeout(() => {
-    if (state.eventSource === source && source.readyState !== EventSource.OPEN) {
+    if (
+      state.eventSource === source &&
+      source.readyState !== EventSource.OPEN
+    ) {
       source.close();
       state.eventSource = null;
       openFetchStream();
@@ -250,9 +259,10 @@ function openStream() {
   });
 
   source.addEventListener("error", () => {
-    els.streamState.textContent = source.readyState === EventSource.CLOSED
-      ? "SSE closed"
-      : "SSE reconnecting";
+    els.streamState.textContent =
+      source.readyState === EventSource.CLOSED
+        ? "SSE closed"
+        : "SSE reconnecting";
   });
 }
 
@@ -313,10 +323,11 @@ async function openFetchStream() {
 
 function handleSseFrame(frame) {
   const lines = frame.split(/\r?\n/);
-  const event = lines
-    .find((line) => line.startsWith("event:"))
-    ?.slice("event:".length)
-    .trim() || "message";
+  const event =
+    lines
+      .find((line) => line.startsWith("event:"))
+      ?.slice("event:".length)
+      .trim() || "message";
   const data = lines
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice("data:".length).trimStart())
@@ -449,9 +460,9 @@ function closeProcessPopup() {
 
 function closeProcessPopupOnOutsideClick(event) {
   if (
-    els.processPopup.hidden
-    || els.processPopup.contains(event.target)
-    || els.pid.contains(event.target)
+    els.processPopup.hidden ||
+    els.processPopup.contains(event.target) ||
+    els.pid.contains(event.target)
   ) {
     return;
   }
@@ -511,18 +522,26 @@ function renderMaps() {
 }
 
 function mapMatches(map, query) {
-  return [map.start, map.end, map.perms, map.offset, map.dev, map.pathname || ""]
-    .some((value) => String(value).toLowerCase().includes(query));
+  return [
+    map.start,
+    map.end,
+    map.perms,
+    map.offset,
+    map.dev,
+    map.pathname || "",
+  ].some((value) => String(value).toLowerCase().includes(query));
 }
 
 function renderHits() {
   const filteredHits = getFilteredHits();
-  const groupedHits = els.hitGrouping.value === "backtrace"
-    ? groupHitsByBacktrace(filteredHits)
-    : filteredHits.map((hit) => ({ hit, count: 1 }));
-  const suffix = els.hitGrouping.value === "backtrace"
-    ? `${groupedHits.length} groups / ${filteredHits.length} events`
-    : `${filteredHits.length} / ${state.hits.length} events`;
+  const groupedHits =
+    els.hitGrouping.value === "backtrace"
+      ? groupHitsByBacktrace(filteredHits)
+      : filteredHits.map((hit) => ({ hit, count: 1 }));
+  const suffix =
+    els.hitGrouping.value === "backtrace"
+      ? `${groupedHits.length} groups / ${filteredHits.length} events`
+      : `${filteredHits.length} / ${state.hits.length} events`;
   els.hitCount.textContent = suffix;
   els.hitsList.replaceChildren();
 
@@ -546,7 +565,11 @@ function getFilteredHits() {
 
 function hitSearchText(hit) {
   const frames = getBacktraceFrames(hit);
-  const registers = (hit.regs || []).flatMap((reg) => [reg.name, reg.value, reg.display]);
+  const registers = (hit.regs || []).flatMap((reg) => [
+    reg.name,
+    reg.value,
+    reg.display,
+  ]);
   return [
     hit.seq,
     hit.breakpoint_id,
@@ -555,7 +578,10 @@ function hitSearchText(hit) {
     hit.timestamp_ms,
     ...registers,
     ...frames,
-  ].filter((value) => value != null).join(" ").toLowerCase();
+  ]
+    .filter((value) => value != null)
+    .join(" ")
+    .toLowerCase();
 }
 
 function groupHitsByBacktrace(hits) {
@@ -582,58 +608,65 @@ function getBacktraceFrames(hit) {
 }
 
 function renderHitCard(hit, count) {
-    const card = document.createElement("article");
-    card.className = "hit-card";
+  const card = document.createElement("article");
+  card.className = "hit-card";
 
-    const top = document.createElement("div");
-    top.className = "hit-top";
-    const title = document.createElement("div");
-    title.className = "hit-title";
-    title.append(
-      textSpan(`#${hit.seq}`),
-      textSpan(`bp ${hit.breakpoint_id}`),
-      textSpan(`pid ${hit.pid}`),
-      textSpan(`tid ${hit.tid}`),
-    );
-    if (count > 1) {
-      title.append(textSpan(`${count} hits`));
-    }
-    const meta = document.createElement("div");
-    meta.className = "hit-meta";
-    meta.textContent = new Date(Number(hit.timestamp_ms)).toLocaleString();
-    top.append(title, meta);
-    const pc = (hit.regs || []).find(reg => ["pc", "ip", "rip"].includes(reg.name.toLowerCase()));
-    if (pc) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "secondary compact";
-      button.textContent = "Disassemble";
-      button.title = `Disassemble ${pc.value}`;
-      button.addEventListener("click", () => {
-        setActiveTab("disasm");
-        disassemblyView.open(hit.pid, pc.value, null, pc.name.toLowerCase() === "pc" ? "arm64" : "x86_64");
-      });
-      title.append(button);
-    }
+  const top = document.createElement("div");
+  top.className = "hit-top";
+  const title = document.createElement("div");
+  title.className = "hit-title";
+  title.append(
+    textSpan(`#${hit.seq}`),
+    textSpan(`bp ${hit.breakpoint_id}`),
+    textSpan(`pid ${hit.pid}`),
+    textSpan(`tid ${hit.tid}`),
+  );
+  if (count > 1) {
+    title.append(textSpan(`${count} hits`));
+  }
+  const meta = document.createElement("div");
+  meta.className = "hit-meta";
+  meta.textContent = new Date(Number(hit.timestamp_ms)).toLocaleString();
+  top.append(title, meta);
+  const pc = (hit.regs || []).find((reg) =>
+    ["pc", "ip", "rip"].includes(reg.name.toLowerCase()),
+  );
+  if (pc) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary compact";
+    button.textContent = "Disassemble";
+    button.title = `Disassemble ${pc.value}`;
+    button.addEventListener("click", () => {
+      setActiveTab("disasm");
+      disassemblyView.open(
+        hit.pid,
+        pc.value,
+        null,
+        pc.name.toLowerCase() === "pc" ? "arm64" : "x86_64",
+      );
+    });
+    title.append(button);
+  }
 
-    const regs = document.createElement("div");
-    regs.className = "reg-grid";
-    for (const reg of hit.regs) {
-      regs.append(renderReg(reg));
-    }
-    for (const reg of (hit.simd || [])) {
-      regs.append(renderReg(reg));
-    }
+  const regs = document.createElement("div");
+  regs.className = "reg-grid";
+  for (const reg of hit.regs) {
+    regs.append(renderReg(reg));
+  }
+  for (const reg of hit.simd || []) {
+    regs.append(renderReg(reg));
+  }
 
-    card.append(top, regs);
-    const backtrace = getBacktraceFrames(hit);
-    if (backtrace.length) {
-      const trace = document.createElement("div");
-      trace.className = "map-path";
-      trace.textContent = `backtrace: ${backtrace.join(" -> ")}`;
-      card.append(trace);
-    }
-    return card;
+  card.append(top, regs);
+  const backtrace = getBacktraceFrames(hit);
+  if (backtrace.length) {
+    const trace = document.createElement("div");
+    trace.className = "map-path";
+    trace.textContent = `backtrace: ${backtrace.join(" -> ")}`;
+    card.append(trace);
+  }
+  return card;
 }
 
 function renderReg(reg) {
@@ -654,8 +687,10 @@ function renderReg(reg) {
 
 function setActiveTab(tabName) {
   memoryView.setActive(tabName === "memory");
-  if (tabName === "memory") memoryView.usePidIfEmpty(els.pid.value || els.mapsPid.value);
-  if (tabName === "disasm") disassemblyView.usePidIfEmpty(els.pid.value || els.mapsPid.value);
+  if (tabName === "memory")
+    memoryView.usePidIfEmpty(els.pid.value || els.mapsPid.value);
+  if (tabName === "disasm")
+    disassemblyView.usePidIfEmpty(els.pid.value || els.mapsPid.value);
   state.activeTab = tabName;
   els.tabs.forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.tab === tabName);
@@ -705,8 +740,12 @@ function debounce(fn, delayMs) {
   let timer = 0;
   return (...args) => {
     window.clearTimeout(timer);
-    timer = window.setTimeout(() => fn(...args).catch((error) => {
-      showError(error.message);
-    }), delayMs);
+    timer = window.setTimeout(
+      () =>
+        fn(...args).catch((error) => {
+          showError(error.message);
+        }),
+      delayMs,
+    );
   };
 }
