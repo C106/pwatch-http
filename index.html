@@ -196,7 +196,7 @@
           </div>
           <form id="memoryForm" class="memory-controls">
             <label>PID<input id="memoryPid" type="number" min="1" max="2147483647" required placeholder="Select process"></label>
-            <label class="memory-address-input">Address (hex)<input id="memoryAddr" type="text" required spellcheck="false" autocomplete="off" placeholder="0x7000000000"></label>
+            <label class="memory-address-input">Address / expression<input id="memoryAddr" type="text" required spellcheck="false" autocomplete="off" placeholder="libUE4.so + 0x1234 - 0x20" title="Address or module with + / - offsets. All numbers are hexadecimal."></label>
             <label>Bytes<input id="memorySize" type="number" min="1" max="4096" value="256" required></label>
             <button id="memoryRead" type="submit">Read / Jump</button>
           </form>
@@ -204,8 +204,9 @@
             <button id="memoryPrev" class="secondary" type="button" disabled>Previous</button>
             <button id="memoryNext" class="secondary" type="button" disabled>Next</button>
             <button id="memoryRefresh" class="secondary" type="button" disabled>Refresh</button>
+            <label class="checkbox memory-auto"><input id="memoryAuto" type="checkbox"><span>Auto refresh · 500ms</span></label>
           </div>
-          <p id="memoryStatus" role="status" aria-live="polite">Enter a PID and hexadecimal address to read memory.</p>
+          <p id="memoryStatus" role="status" aria-live="polite">Enter a PID and address expression to read memory.</p>
           <div id="memoryView" class="table-wrap memory-scroll" aria-busy="false" tabindex="0" aria-label="Memory hex table">
             <table class="hex-table">
               <caption class="sr-only">Memory addresses, hexadecimal bytes and ASCII</caption>
@@ -218,14 +219,21 @@
           <div class="toolbar"><h2>Disassembly</h2></div>
           <form id="disasmForm" class="memory-controls">
             <label>PID<input id="disasmPid" type="number" min="1" max="2147483647" required placeholder="Select process"></label>
-            <label class="memory-address-input">Address (hex)<input id="disasmAddr" type="text" required spellcheck="false" autocomplete="off" placeholder="0x7000000000"></label>
+            <label class="memory-address-input">Address / expression<input id="disasmAddr" type="text" required spellcheck="false" autocomplete="off" placeholder="libUE4.so + 0x1234 - 0x20" title="Address or module with + / - offsets. All numbers are hexadecimal."></label>
             <label>Architecture<select id="disasmArch"><option value="arm64">ARM64 (LE)</option><option value="x86_64">x86-64 (Intel)</option></select></label>
             <label>Page bytes<input id="disasmSize" type="number" min="1" max="4082" value="256" required></label>
             <button id="disasmRead" type="submit">Read / Jump</button>
           </form>
-          <div class="memory-navigation">
-            <button id="disasmPrev" class="secondary icon-button" type="button" disabled title="Previous visited page" aria-label="Previous visited page"><img src="./vendor/lucide/arrow-left.svg" alt="" width="18" height="18"></button>
+          <div class="memory-navigation disasm-navigation">
+            <div class="navigation-group" role="group" aria-label="Jump history">
+              <button id="disasmBack" class="secondary icon-button" type="button" disabled title="Back in jump history" aria-label="Back in jump history"><img src="./vendor/lucide/arrow-left.svg" alt="" width="18" height="18"></button>
+              <button id="disasmForward" class="secondary icon-button" type="button" disabled title="Forward in jump history" aria-label="Forward in jump history"><img src="./vendor/lucide/arrow-right.svg" alt="" width="18" height="18"></button>
+            </div>
+            <select id="disasmHistory" aria-label="Jump history" title="Jump history" disabled><option>No jump history</option></select>
+            <div class="navigation-group page-navigation" role="group" aria-label="Instruction pages">
+            <button id="disasmPrev" class="secondary icon-button" type="button" disabled title="Previous instruction page" aria-label="Previous instruction page"><img src="./vendor/lucide/arrow-left.svg" alt="" width="18" height="18"></button>
             <button id="disasmNext" class="secondary icon-button" type="button" disabled title="Next instructions" aria-label="Next instructions"><img src="./vendor/lucide/arrow-right.svg" alt="" width="18" height="18"></button>
+            </div>
             <button id="disasmRefresh" class="secondary icon-button" type="button" disabled title="Refresh instructions" aria-label="Refresh instructions"><img src="./vendor/lucide/refresh-cw.svg" alt="" width="18" height="18"></button>
           </div>
           <p id="disasmStatus" role="status" aria-live="polite">No instructions loaded.</p>
@@ -247,6 +255,7 @@
       </div>
     </template>
 
+    <script src="./address-expression.js"></script>
     <script src="./memory-view.js"></script>
     <script src="./disassembler.js"></script>
     <script src="./disassembly-view.js"></script>

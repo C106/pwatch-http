@@ -48,7 +48,12 @@ const els = {
 };
 
 els.apiBase.value = state.apiBase;
-const memoryView = MemoryView.create(document, api);
+function resolveAddressExpression(pid, expression, options = {}) {
+  return AddressExpressions.resolve(pid, expression, api, options);
+}
+
+const memoryView = MemoryView.create(document, api, resolveAddressExpression);
+memoryView.setActive(false);
 const disassemblyView = DisassemblyView.create(document, api, undefined, {
   breakpoint(pid, addr) {
     els.pid.value = pid;
@@ -57,7 +62,7 @@ const disassemblyView = DisassemblyView.create(document, api, undefined, {
     els.addr.focus();
     els.form.scrollIntoView({ block: "nearest", behavior: "smooth" });
   },
-});
+}, resolveAddressExpression);
 
 els.connectBtn.addEventListener("click", connect);
 els.refreshBtn.addEventListener("click", refreshAll);
@@ -648,6 +653,7 @@ function renderReg(reg) {
 }
 
 function setActiveTab(tabName) {
+  memoryView.setActive(tabName === "memory");
   if (tabName === "memory") memoryView.usePidIfEmpty(els.pid.value || els.mapsPid.value);
   if (tabName === "disasm") disassemblyView.usePidIfEmpty(els.pid.value || els.mapsPid.value);
   state.activeTab = tabName;

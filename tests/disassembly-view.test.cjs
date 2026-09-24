@@ -27,6 +27,57 @@ test("real x86 engine: Intel syntax, relative branches, instruction-aligned page
   assert.equal(branch.rows[0].operands, "0xffffffffff000004");
 });
 
+test("operand links use real ARM64 branch, address and literal-load targets", async () => {
+  const decode = await engine;
+  const base = 0xffffffffff000000n;
+  for (const [bytes, expected] of [
+    [[2, 0, 0, 0x14], base + 8n], // b
+    [[2, 0, 0, 0x94], base + 8n], // bl
+    [[0x40, 0, 0, 0x54], base + 8n], // b.eq
+    [[0x40, 0, 0, 0xb4], base + 8n], // cbz
+    [[0x40, 0, 0, 0x36], base + 8n], // tbz: bit number is not a link
+    [[0x40, 0, 0, 0x10], base + 8n], // adr
+    [[0, 0, 0, 0x90], base], // adrp
+    [[0x40, 0, 0, 0x58], base + 8n], // ldr literal
+  ]) {
+    const row = decode(bytes, base, "arm64").rows[0];
+    const target = view.operandTarget(row, "arm64");
+    assert.equal(target?.addr, `0x${expected.toString(16)}`, `${row.mnemonic} ${row.operands}`);
+    assert.equal(row.operands.slice(target.start, target.end), `#0x${expected.toString(16)}`);
+  }
+});
+
+test("operand links use x86-64 direct, RIP/EIP-relative and absolute memory addresses", async () => {
+  const decode = await engine;
+  const base = 0xffffffffff000000n;
+  for (const [bytes, expected] of [
+    [[0xeb, 2], "0xffffffffff000004"],
+    [[0xe8, 0, 0, 0, 0], "0xffffffffff000005"],
+    [[0x48, 0x8b, 5, 0x10, 0, 0, 0], "0xffffffffff000017"],
+    [[0x48, 0x8b, 5, 0xf0, 0xff, 0xff, 0xff], "0xfffffffffefffff7"],
+    [[0x67, 0x48, 0x8b, 5, 0x10, 0, 0, 0], "0x00000000ff000018"],
+    [[0x48, 0x8b, 4, 0x25, 0, 0x10, 0, 0], "0x0000000000001000"],
+  ]) {
+    const row = decode(bytes, base, "x86_64").rows[0];
+    assert.equal(view.operandTarget(row, "x86_64")?.addr, expected, `${row.mnemonic} ${row.operands}`);
+  }
+});
+
+test("register-dependent addresses, immediates, invalid bytes and FS/GS offsets are not links", () => {
+  for (const [arch, mnemonic, operands] of [
+    ["arm64", "add", "x0, x0, #0x1000"],
+    ["arm64", "ldr", "x0, [x1, #0x1000]"],
+    ["arm64", "br", "x0"],
+    ["x86_64", "movabs", "rax, 0x7000000000"],
+    ["x86_64", "call", "rax"],
+    ["x86_64", "mov", "rax, qword ptr [rbx + 0x1000]"],
+    ["x86_64", "mov", "rax, qword ptr fs:[0x1000]"],
+    ["x86_64", "mov", "rax, qword ptr gs:[rip + 0x1000]"],
+  ]) assert.equal(view.operandTarget({ mnemonic, operands, addr: 0n, bytes: [0] }, arch), null, operands);
+  assert.equal(view.operandTarget({ mnemonic: "b", operands: "#0x1000", invalid: true }, "arm64"), null);
+  assert.equal(view.operandTarget({ mnemonic: "b", operands: "#0" }, "arm64").addr, "0x0000000000000000");
+});
+
 test("invalid and incomplete bytes stay visible and do not stop decoding", async () => {
   const decode = await engine;
   const result = decode([0xff, 0xff, 0xff, 0xff, ...nop, 1, 2], 0n, "arm64");
@@ -68,14 +119,14 @@ class Element {
   addEventListener(name, handler) { this.events[name] = handler; }
   fire(name) { return this.events[name]({ preventDefault() {} }); }
 }
-function harness(api, decoder = () => engine, actions) {
+function harness(api, decoder = () => engine, actions, resolver) {
   const elements = {};
   const doc = {
     querySelector(id) { return elements[id] ||= new Element(); },
     createElement() { return new Element(); },
     createDocumentFragment() { const e = new Element(); e.fragment = true; return e; },
   };
-  const controller = view.create(doc, api, decoder, actions);
+  const controller = view.create(doc, api, decoder, actions, resolver);
   const el = name => elements[`#disasm${name}`];
   el("Arch").value = "arm64";
   el("Size").value = "256";
@@ -110,6 +161,135 @@ test("read, next, previous and refresh retain instruction boundaries and map lim
   controller.setPid(43);
   assert.equal(el("Rows").children.length, 0);
   assert.equal(el("Prev").disabled, true);
+});
+
+test("operand jumps have independent back/forward history with page and scroll restoration", async () => {
+  const { controller, el } = harness(async path => response(path, [0, 4, 0, 0x14])); // b PC+0x1000
+  await controller.open(42, "20000000000000", "20000000000200");
+  await el("Next").fire("click");
+  const source = el("Addr").value;
+  el("View").scrollTop = 128;
+  const link = el("Rows").children[0].children[3].children[1];
+  assert.match(link.title, /Jump to 0x0020000000001100/);
+  await link.fire("click");
+  assert.equal(el("Addr").value, "0x0020000000001100");
+  assert.equal(el("Prev").disabled, true);
+  assert.equal(el("Back").disabled, false);
+  assert.equal(el("History").children.length, 2);
+  el("View").scrollTop = 64;
+  await el("Back").fire("click");
+  assert.equal(el("Addr").value, source);
+  assert.equal(el("View").scrollTop, 128);
+  assert.equal(el("Prev").disabled, false);
+  assert.equal(el("Forward").disabled, false);
+  await el("Forward").fire("click");
+  assert.equal(el("Addr").value, "0x0020000000001100");
+  assert.equal(el("View").scrollTop, 64);
+  await el("Refresh").fire("click");
+  assert.equal(el("History").children.length, 2);
+  await el("Back").fire("click");
+  await el("Prev").fire("click");
+  assert.equal(el("Addr").value, "0x0020000000000000");
+  assert.equal(el("Forward").disabled, true);
+});
+
+test("typed jumps preserve history, truncate forward visits, and restore entries from the menu", async () => {
+  const { controller, el } = harness(async path => response(path));
+  await controller.open(42, "1000");
+  el("Addr").value = "2000";
+  el("Addr").fire("input");
+  await el("Form").fire("submit");
+  assert.equal(el("History").children.length, 2);
+  await el("Back").fire("click");
+  el("Addr").value = "3000";
+  el("Addr").fire("input");
+  await el("Form").fire("submit");
+  assert.equal(el("History").children.length, 2);
+  assert.equal(el("Forward").disabled, true);
+  el("History").value = "0";
+  await el("History").fire("change");
+  assert.equal(el("Addr").value, "0x0000000000001000");
+  await el("Forward").fire("click");
+  assert.equal(el("Addr").value, "0x0000000000003000");
+  await el("Form").fire("submit");
+  assert.equal(el("History").children.length, 2); // Same query is not duplicated.
+  controller.setPid(43);
+  assert.equal(el("Back").disabled, true);
+  assert.equal(el("Forward").disabled, true);
+  assert.equal(el("History").disabled, true);
+});
+
+test("failed jumps retain the last successful location and stale jumps do not create visits", async () => {
+  let fail = false;
+  let finish;
+  const { controller, el } = harness(path => {
+    if (fail) throw new Error("unmapped target");
+    if (new URL(path, "http://local").searchParams.get("addr") === "0x0000000000003000") return new Promise(resolve => { finish = () => resolve(response(path)); });
+    return Promise.resolve(response(path));
+  });
+  await controller.open(42, "1000");
+  fail = true;
+  await controller.open(42, "2000");
+  assert.match(el("Status").textContent, /unmapped target/);
+  assert.equal(el("Back").disabled, false);
+  assert.equal(el("History").children.length, 1);
+  fail = false;
+  await el("Back").fire("click");
+  assert.equal(el("Addr").value, "0x0000000000001000");
+  const stale = controller.open(42, "3000");
+  assert.equal(el("Back").disabled, true);
+  await controller.open(42, "4000");
+  finish(); await stale;
+  assert.equal(el("Addr").value, "0x0000000000004000");
+  assert.equal(el("History").children.length, 2);
+  controller.reset();
+  assert.equal(el("History").disabled, true);
+});
+
+test("history restores PID and architecture and stays bounded", async () => {
+  const { controller, el } = harness(async path => response(path));
+  await controller.open(42, "1000");
+  await controller.open(43, "2001", null, "x86_64");
+  await el("Back").fire("click");
+  assert.equal(el("Pid").value, "42");
+  assert.equal(el("Arch").value, "arm64");
+  for (let i = 1; i < 103; i++) await controller.open(42, (4096 + i * 4).toString(16), null, "arm64");
+  assert.equal(el("History").children.length, 100);
+});
+
+test("disassembly form resolves module arithmetic before reading", async () => {
+  const calls = [];
+  const { el } = harness(async path => { calls.push(path); return response(path); }, () => engine, {}, async () => "0x0020000000000020");
+  el("Pid").value = "42"; el("Addr").value = "libgame.so - 0x10"; el("Size").value = "16";
+  await el("Form").fire("submit");
+  assert.match(calls[0], /addr=0x0020000000000020/);
+  assert.equal(el("Addr").value, "0x0020000000000020");
+  assert.match(el("Status").textContent, /Resolved libgame\.so - 0x10/);
+});
+
+test("resolved disassembly addresses still enforce alignment and range before reading", async () => {
+  for (const addr of ["0x101", "0xfffffffffffffffc"]) {
+    const { el } = harness(async () => { assert.fail("Must not read memory"); }, () => engine, {}, async () => addr);
+    el("Pid").value = "42"; el("Addr").value = "libgame.so+1";
+    await el("Form").fire("submit");
+    assert.match(el("Status").textContent, /aligned|64-bit/);
+    assert.equal(el("Read").disabled, false);
+    assert.equal(el("Rows").children.length, 0);
+  }
+});
+
+test("reset during module resolution prevents a stale disassembly read", async () => {
+  let finish;
+  let signal;
+  const { controller, el } = harness(async () => { assert.fail("Must not read memory"); }, () => engine, {},
+    (pid, addr, options) => { signal = options.signal; return new Promise(resolve => { finish = resolve; }); });
+  el("Pid").value = "42"; el("Addr").value = "libgame.so";
+  const read = el("Form").fire("submit");
+  controller.reset();
+  assert.equal(signal.aborted, true);
+  finish("0x1000"); await read;
+  assert.equal(el("Addr").value, "libgame.so");
+  assert.equal(el("Rows").children.length, 0);
 });
 
 test("manual x86 page uses lookahead and supports execution breakpoint preparation", async () => {
@@ -189,11 +369,11 @@ test("stale responses and pending engine initialization cannot overwrite resets"
 
 test("HTML includes controls, accessible icons and scripts in dependency order", () => {
   const html = readFileSync(`${__dirname}/../index.html`, "utf8");
-  for (const name of ["Form", "Pid", "Addr", "Size", "Arch", "Read", "Prev", "Next", "Refresh", "Status", "Rows", "View"]) {
+  for (const name of ["Form", "Pid", "Addr", "Size", "Arch", "Read", "Prev", "Next", "Back", "Forward", "History", "Refresh", "Status", "Rows", "View"]) {
     assert.equal(html.split(`id="disasm${name}"`).length, 2);
   }
   assert.match(html, /data-tab="disasm"/);
   assert.match(html, /aria-label="Next instructions"/);
-  const scripts = ["memory-view.js", "disassembler.js", "disassembly-view.js", "app.js"].map(s => html.indexOf(`src="./${s}"`));
+  const scripts = ["address-expression.js", "memory-view.js", "disassembler.js", "disassembly-view.js", "app.js"].map(s => html.indexOf(`src="./${s}"`));
   assert.deepEqual(scripts, [...scripts].sort((a, b) => a - b));
 });

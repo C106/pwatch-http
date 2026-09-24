@@ -533,7 +533,16 @@ td code,
 .memory-controls label { width: 140px; }
 .memory-controls .memory-address-input { flex: 1; min-width: 240px; }
 .memory-controls button, .memory-navigation button { padding: 0 14px; }
-.memory-navigation { display: flex; gap: 8px; }
+.memory-navigation { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.memory-auto { margin-left: 8px; }
+.memory-changed { animation: memory-change 500ms ease-out; }
+@keyframes memory-change {
+  from { background: #d6a83f; color: #101214; }
+  to { background: transparent; color: inherit; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .memory-changed { animation: none; background: #d6a83f; color: #101214; }
+}
 #memoryStatus { color: var(--muted); overflow-wrap: anywhere; font-size: 13px; }
 #memoryStatus.memory-error { color: #ffb3b3; }
 .memory-scroll { overflow: auto; max-height: 65vh; }
@@ -552,6 +561,13 @@ td code,
 .icon-button img { filter: invert(1); }
 .disasm-table td:nth-child(2) { color: var(--muted); }
 .disasm-table td:nth-child(3) { color: var(--accent); font-weight: 700; }
+.disasm-table .operand-address { height: auto; border: 0; border-radius: 0; padding: 0; background: transparent; color: var(--accent-2); font: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.operand-address:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+.disasm-navigation { flex-wrap: wrap; align-items: center; }
+.navigation-group { display: flex; gap: 8px; }
+.page-navigation { border-left: 1px solid var(--line); padding-left: 8px; }
+.page-navigation img { transform: rotate(90deg); }
+#disasmHistory { flex: 1 1 220px; min-width: 0; max-width: 420px; width: 220px; text-overflow: ellipsis; }
 .disasm-table .disasm-invalid td:nth-child(3), .disasm-table .disasm-invalid td:nth-child(4) { color: var(--warning); }
 .inspect-actions { white-space: normal; }
 .inspect-actions button { margin: 2px 4px 2px 0; }

@@ -2,6 +2,7 @@
 (function (root) {
   "use strict";
   const MAX_ADDRESS = (1n << 64n) - 1n;
+  const REFRESH_MS = 500;
 
   function address(text) {
     const digits = String(text).trim().replace(/^0x/i, "");
@@ -56,10 +57,70 @@
     return { ...query, addr: hex(next), size: Number(BigInt(query.size) < MAX_ADDRESS - next + 1n ? BigInt(query.size) : MAX_ADDRESS - next + 1n) };
   }
 
-  function create(doc, api) {
-    const el = Object.fromEntries(["Form", "Pid", "Addr", "Size", "Read", "Prev", "Next", "Refresh", "Status", "Rows", "View"]
+  function create(doc, api, resolveAddress = (_pid, expression) => expression) {
+    const el = Object.fromEntries(["Form", "Pid", "Addr", "Size", "Read", "Prev", "Next", "Refresh", "Auto", "Status", "Rows", "View"]
       .map(name => [name, doc.querySelector(`#memory${name}`)]));
     let version = 0, controller = null, loaded = null;
+    let snapshot = null, pollTimer = null, flashTimer = null, active = true;
+
+    function cancelPoll() { clearTimeout(pollTimer); pollTimer = null; }
+    function schedule() {
+      cancelPoll();
+      if (el.Auto.checked && active && !doc.hidden && loaded && !controller) {
+        pollTimer = setTimeout(() => { pollTimer = null; void read(loaded, "auto"); }, REFRESH_MS);
+      }
+    }
+    function render(formatted, data, previous) {
+      clearTimeout(flashTimer);
+      const fragment = doc.createDocumentFragment();
+      const changed = [];
+      let count = 0;
+      formatted.forEach((row, rowIndex) => {
+        const tr = doc.createElement("tr");
+        const addr = doc.createElement("td");
+        addr.textContent = row.addr;
+        const bytes = doc.createElement("td");
+        const ascii = doc.createElement("td");
+        const offset = rowIndex * 16;
+        const length = Math.min(16, data.length - offset);
+        for (let i = 0; i < length; i++) {
+          const value = data[offset + i];
+          const difference = previous && value !== previous[offset + i];
+          if (difference) count++;
+          for (const [cell, text] of [[bytes, value.toString(16).padStart(2, "0")], [ascii, value >= 32 && value <= 126 ? String.fromCharCode(value) : "."]]) {
+            const span = doc.createElement("span");
+            span.textContent = text;
+            if (difference) {
+              span.className = "memory-changed";
+              span.title = `${hex(address(row.addr) + BigInt(i))}: ${previous[offset + i].toString(16).padStart(2, "0")} → ${value.toString(16).padStart(2, "0")}`;
+              changed.push(span);
+            }
+            cell.append(span);
+          }
+          if (i < length - 1) {
+            const space = doc.createElement("span");
+            space.textContent = " ";
+            bytes.append(space);
+          }
+        }
+        if (length < 16) {
+          const padding = doc.createElement("span");
+          padding.textContent = " ".repeat((16 - length) * 3);
+          bytes.append(padding);
+        }
+        tr.append(addr, bytes, ascii);
+        fragment.append(tr);
+      });
+      const top = el.View.scrollTop, left = el.View.scrollLeft;
+      el.Rows.replaceChildren(fragment);
+      el.View.scrollTop = top;
+      el.View.scrollLeft = left;
+      if (changed.length) flashTimer = setTimeout(() => {
+        for (const span of changed) span.classList.remove("memory-changed");
+        flashTimer = null;
+      }, REFRESH_MS);
+      return count;
+    }
 
     function message(text, error = false) {
       el.Status.textContent = text;
@@ -73,50 +134,69 @@
       el.Next.disabled = busy || !loaded || !page(loaded, 1);
     }
     function reset() {
+      cancelPoll();
+      clearTimeout(flashTimer);
+      flashTimer = null;
       version++;
       controller?.abort();
       controller = null;
       loaded = null;
+      snapshot = null;
       el.Rows.replaceChildren();
       controls(false);
-      message("Enter a PID and hexadecimal address to read memory.");
+      message("Enter a PID and address expression to read memory.");
     }
-    async function read(query) {
-      reset();
+    async function read(input, mode = "jump") {
+      const refreshing = mode !== "jump" && loaded;
+      if (refreshing) {
+        cancelPoll();
+        version++;
+        controller?.abort();
+      } else reset();
       const current = version;
+      let timer;
       try {
-        query = request(query.pid, query.addr, query.size);
+        request(input.pid, "0", input.size); // Validate PID/size before resolving remotely.
+        const activeController = new AbortController();
+        controller = activeController;
+        timer = setTimeout(() => activeController.abort(), 15000);
+        controls(true);
+        if (mode !== "auto") message("Resolving address...");
+        let resolved = resolveAddress(input.pid, input.addr, { signal: activeController.signal });
+        if (resolved?.then) resolved = await resolved;
+        if (current !== version) return;
+        activeController.signal.throwIfAborted();
+        const query = request(input.pid, resolved, input.size);
+        const expression = String(input.addr).trim();
+        const prefix = expression !== query.addr ? `Resolved ${expression} to ${query.addr}. ` : "";
         el.Pid.value = String(query.pid);
         el.Addr.value = query.addr;
         el.Size.value = String(query.size);
-        const activeController = new AbortController();
-        controller = activeController;
-        const timer = setTimeout(() => activeController.abort(), 15000);
-        controls(true);
-        message(`Reading PID ${query.pid} at ${query.addr}…`);
-        let body;
-        try {
-          body = await api(`/memory/read?${new URLSearchParams(query)}`, { signal: activeController.signal, cache: "no-store" });
-        } finally { clearTimeout(timer); }
+        if (mode !== "auto") message(`${prefix}Reading PID ${query.pid} at ${query.addr}…`);
+        const body = await api(`/memory/read?${new URLSearchParams(query)}`, { signal: activeController.signal, cache: "no-store" });
         if (current !== version) return;
+        activeController.signal.throwIfAborted();
         const formatted = validateResponse(body, query);
-        const fragment = doc.createDocumentFragment();
-        for (const row of formatted) {
-          const tr = doc.createElement("tr");
-          for (const value of [row.addr, row.hex, row.ascii]) {
-            const td = doc.createElement("td");
-            td.textContent = value; // Memory bytes must never be interpreted as HTML.
-            tr.append(td);
-          }
-          fragment.append(tr);
-        }
-        el.Rows.replaceChildren(fragment);
+        const previous = loaded && ["pid", "addr", "size"].every(key => loaded[key] === query[key]) ? snapshot : null;
+        const changed = render(formatted, body.data, previous);
+        snapshot = body.data.slice();
         loaded = query;
-        message(`PID ${query.pid} · ${query.addr} – ${hex(address(query.addr) + BigInt(query.size - 1))} · ${query.size} bytes`);
+        message(`${prefix}PID ${query.pid} · ${query.addr} – ${hex(address(query.addr) + BigInt(query.size - 1))} · ${query.size} bytes${previous ? ` · ${changed} changed` : ""}`);
       } catch (error) {
-        if (current === version) message(error.name === "AbortError" ? "Memory request timed out. Retry Read / Jump." : error.message, true);
+        if (current === version) {
+          loaded = null;
+          snapshot = null;
+          clearTimeout(flashTimer);
+          flashTimer = null;
+          el.Rows.replaceChildren();
+          const stopped = el.Auto.checked;
+          el.Auto.checked = false;
+          message((error.name === "AbortError" ? "Memory request timed out. Retry Read / Jump." : error.message)
+            + (stopped ? " Auto refresh stopped." : ""), true);
+        }
       } finally {
-        if (current === version) { controller = null; controls(false); }
+        clearTimeout(timer);
+        if (current === version) { controller = null; controls(false); schedule(); }
       }
     }
     function readInputs(event) {
@@ -125,12 +205,15 @@
     }
     el.Form.addEventListener("submit", readInputs);
     for (const input of [el.Pid, el.Addr, el.Size]) input.addEventListener("input", reset);
-    el.Refresh.addEventListener("click", () => loaded && read(loaded));
+    el.Refresh.addEventListener("click", () => !controller && loaded && read(loaded, "refresh"));
+    el.Auto.addEventListener("change", schedule);
+    doc.addEventListener?.("visibilitychange", schedule);
     el.Prev.addEventListener("click", () => loaded && read(page(loaded, -1)));
     el.Next.addEventListener("click", () => loaded && read(page(loaded, 1)));
     reset();
     return {
       reset,
+      setActive(value) { active = value; schedule(); },
       setPid(pid) { reset(); el.Pid.value = String(pid); },
       usePidIfEmpty(pid) { if (!el.Pid.value && pid) el.Pid.value = String(pid); },
       open(pid, addr, end) {
