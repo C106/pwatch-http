@@ -69,6 +69,10 @@
             breakpoint_id: 1,
             timestamp_ms: 0,
             regs: [{ name: "ip", value: "0xffffffffff000000" }],
+            simd: [
+              { name: "v0.lo", value: "0x0123456789abcdef" },
+              { name: "v0.hi", value: "0xfedcba9876543210" },
+            ],
           },
         ];
       } else if (u.pathname === "/processes") {
@@ -130,6 +134,21 @@
     $("#disasmRefresh").click();
     await waitFor(() => $("#disasmRows tr") && !$("#disasmRead").disabled);
     $("#hitsList .hit-title button").click();
+    check(
+      $("#hitsList .register-section-title:last-of-type")?.textContent ===
+        "FP / SIMD registers",
+      "Separate FP/SIMD register section",
+    );
+    check(
+      [
+        ...d.querySelectorAll(
+          "#hitsList .register-section:last-child .reg-name",
+        ),
+      ]
+        .map((node) => node.textContent)
+        .join(",") === "v0.lo,v0.hi",
+      "SIMD low/high register values",
+    );
     await waitFor(() => $("#disasmRows tr") && !$("#disasmRead").disabled);
     check($("#disasmArch").value === "x86_64", "Hit architecture");
     check(

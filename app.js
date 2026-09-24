@@ -565,11 +565,9 @@ function getFilteredHits() {
 
 function hitSearchText(hit) {
   const frames = getBacktraceFrames(hit);
-  const registers = (hit.regs || []).flatMap((reg) => [
-    reg.name,
-    reg.value,
-    reg.display,
-  ]);
+  const registers = [...(hit.regs || []), ...getSimdRegisters(hit)].flatMap(
+    (reg) => [reg.name, reg.value, reg.display],
+  );
   return [
     hit.seq,
     hit.breakpoint_id,
@@ -582,6 +580,56 @@ function hitSearchText(hit) {
     .filter((value) => value != null)
     .join(" ")
     .toLowerCase();
+}
+
+function getSimdRegisters(hit) {
+  const values = hit.simd || hit.fp_regs || hit.vregs || [];
+  const explicit = Array.isArray(values)
+    ? values.flatMap((reg, index) => {
+        if (Array.isArray(reg)) {
+          const low = reg[0];
+          const high = reg[1];
+          return [
+            { name: `v${index}.lo`, value: formatSimdPart(low) },
+            { name: `v${index}.hi`, value: formatSimdPart(high) },
+          ];
+        }
+        return reg && typeof reg === "object" ? [reg] : [];
+      })
+    : [];
+  const inline = (hit.regs || []).filter((reg) =>
+    /^(?:v\d+(?:\.(?:lo|hi))?|[bhsdq]\d+)$/i.test(reg.name || ""),
+  );
+  return [...explicit, ...inline];
+}
+
+function getGeneralRegisters(hit) {
+  return (hit.regs || []).filter(
+    (reg) => !/^(?:v\d+(?:\.(?:lo|hi))?|[bhsdq]\d+)$/i.test(reg.name || ""),
+  );
+}
+
+function formatSimdPart(value) {
+  if (typeof value === "bigint")
+    return `0x${value.toString(16).padStart(16, "0")}`;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return `0x${value.toString(16).padStart(16, "0")}`;
+  }
+  return String(value ?? "0");
+}
+
+function renderRegisterSection(title, registers) {
+  if (!registers.length) return null;
+  const section = document.createElement("section");
+  section.className = "register-section";
+  const heading = document.createElement("h3");
+  heading.className = "register-section-title";
+  heading.textContent = title;
+  const grid = document.createElement("div");
+  grid.className = "reg-grid";
+  for (const reg of registers) grid.append(renderReg(reg));
+  section.append(heading, grid);
+  return section;
 }
 
 function groupHitsByBacktrace(hits) {
@@ -649,16 +697,17 @@ function renderHitCard(hit, count) {
     title.append(button);
   }
 
-  const regs = document.createElement("div");
-  regs.className = "reg-grid";
-  for (const reg of hit.regs) {
-    regs.append(renderReg(reg));
-  }
-  for (const reg of hit.simd || []) {
-    regs.append(renderReg(reg));
-  }
-
-  card.append(top, regs);
+  const generalSection = renderRegisterSection(
+    "General registers",
+    getGeneralRegisters(hit),
+  );
+  const simdSection = renderRegisterSection(
+    "FP / SIMD registers",
+    getSimdRegisters(hit),
+  );
+  card.append(top);
+  if (generalSection) card.append(generalSection);
+  if (simdSection) card.append(simdSection);
   const backtrace = getBacktraceFrames(hit);
   if (backtrace.length) {
     const trace = document.createElement("div");

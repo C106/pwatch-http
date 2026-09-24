@@ -490,6 +490,19 @@ td code,
   gap: 8px;
 }
 
+.register-section + .register-section {
+  margin-top: 14px;
+}
+
+.register-section-title {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .reg {
   border: 1px solid #252b33;
   border-radius: 6px;
