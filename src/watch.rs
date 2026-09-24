@@ -1,5 +1,6 @@
-use crate::{filter::RegFilter, perf::PerfMap};
-use log::{debug, error};
+use crate::filter::RegFilter;
+use crate::lk1337;
+use log::error;
 use perf_event_open_sys as sys;
 use serde::Serialize;
 use std::sync::{
@@ -8,6 +9,69 @@ use std::sync::{
 };
 use tokio::task::JoinHandle;
 
+pub fn start_driver_watch<F>(config: &WatchConfig, mut on_hit: F) -> anyhow::Result<RunningWatch>
+where
+    F: FnMut(crate::perf::SampleData) + Send + 'static,
+{
+    let driver = std::sync::Arc::new(lk1337::Driver::open()?);
+    let typ = match config.ty {
+        x if x == sys::bindings::HW_BREAKPOINT_X => lk1337::BP_EXECUTE,
+        x if x == sys::bindings::HW_BREAKPOINT_R => lk1337::BP_READ,
+        x if x == sys::bindings::HW_BREAKPOINT_W => lk1337::BP_WRITE,
+        _ => lk1337::BP_READWRITE,
+    };
+    let len = if typ == lk1337::BP_EXECUTE {
+        4
+    } else if config.len == 0 {
+        1
+    } else {
+        config.len as i32
+    };
+    let mut flags = lk1337::BP_F_DETAIL;
+    if config.backtrace {
+        flags |= lk1337::BP_F_BACKTRACE;
+    }
+    let id = driver.create(config.addr, typ, len, config.pid as i32, 256, flags)?;
+    let cancel = Arc::new(AtomicBool::new(false));
+    let thread_cancel = Arc::clone(&cancel);
+    let filter = config.filter.clone();
+    let thread = std::thread::spawn(move || {
+        while !thread_cancel.load(Ordering::Relaxed) {
+            match driver.hits(id) {
+                Ok(hits) => {
+                    for hit in hits {
+                        let mut regs = hit.after.regs.to_vec();
+                        regs.push(hit.after.sp);
+                        regs.push(hit.after.pc);
+                        let count = (hit.bt_count as usize).min(lk1337::BT_MAX);
+                        let backtrace = (count > 0).then(|| hit.backtrace[..count].to_vec());
+                        let data = crate::perf::SampleData {
+                            pid: hit.pid as u32,
+                            tid: hit.tid as u32,
+                            regs,
+                            backtrace,
+                            simd: hit.after.vregs.to_vec(),
+                        };
+                        if filter.as_ref().is_none_or(|filter| filter.matches(&data)) {
+                            on_hit(data);
+                        }
+                    }
+                }
+                Err(error) => log::error!("LK1337 hit polling failed: {}", error),
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let _ = driver.remove(id);
+    });
+    Ok(RunningWatch {
+        cancel,
+        tasks: vec![tokio::task::spawn_blocking(move || {
+            let _ = thread.join();
+        })],
+    })
+}
+
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct WatchConfig {
     pub pid: u32,
@@ -90,77 +154,11 @@ pub fn start_watch<F>(
 where
     F: FnMut(crate::perf::SampleData) + Send + Clone + 'static,
 {
-    let maps = if !config.thread {
-        procfs::process::Process::new(config.pid as i32)?
-            .tasks()?
-            .filter_map(Result::ok)
-            .map(|t| {
-                (
-                    t.tid as u32,
-                    PerfMap::new(
-                        config.ty,
-                        config.addr,
-                        config.len,
-                        t.tid,
-                        config.buf_size,
-                        config.backtrace,
-                    ),
-                )
-            })
-            .filter_map(|(tid, result)| match result {
-                Ok(map) => Some((tid, map)),
-                Err(e) => {
-                    error!("perf_map_open error: {}", e);
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-    } else {
-        vec![(
-            config.pid,
-            PerfMap::new(
-                config.ty,
-                config.addr,
-                config.len,
-                config.pid as i32,
-                config.buf_size,
-                config.backtrace,
-            )?,
-        )]
-    };
-
-    if maps.is_empty() {
-        anyhow::bail!("no valid perf map");
-    }
-    debug!("watchpoint installed on {} thread(s)", maps.len());
-
-    let cancel = Arc::new(AtomicBool::new(false));
-    let mut threads = Vec::with_capacity(maps.len());
-    let tasks = maps
-        .into_iter()
-        .map(|(tid, map)| {
-            let filter = config.filter.clone();
-            let cancel = Arc::clone(&cancel);
-            let mut handle_event = handle_event.clone();
-            threads.push(tid);
-            tokio::spawn(async move {
-                let Err(e) = map
-                    .events(move |data| {
-                        if cancel.load(Ordering::Relaxed) {
-                            return;
-                        }
-                        if match &filter {
-                            Some(filter) => filter.matches(&data),
-                            None => true,
-                        } {
-                            handle_event(data);
-                        }
-                    })
-                    .await;
-                error!("error: {}", e);
-            })
-        })
-        .collect();
-
-    Ok((WatchStart { threads }, RunningWatch { cancel, tasks }))
+    let running = start_driver_watch(&config, handle_event)?;
+    Ok((
+        WatchStart {
+            threads: vec![config.pid],
+        },
+        running,
+    ))
 }

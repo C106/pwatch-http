@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::arch;
 use log::{debug, warn};
 use nix::sys::mman::{MapFlags, ProtFlags};
@@ -28,6 +30,7 @@ pub struct SampleData {
     pub tid: u32,
     pub regs: Vec<u64>,
     pub backtrace: Option<Vec<u64>>,
+    pub simd: Vec<[u64; 2]>,
 }
 
 impl PerfMap {
@@ -183,6 +186,7 @@ impl PerfMap {
             tid,
             regs,
             backtrace,
+            simd: Vec::new(),
         })
     }
 }

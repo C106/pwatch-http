@@ -1,10 +1,12 @@
 use crate::{arch, perf::SampleData};
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct RegFilter {
     groups: Vec<Vec<Predicate>>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 struct Predicate {
     reg: usize,
@@ -38,6 +40,7 @@ impl RegFilter {
         Ok(Self { groups })
     }
 
+    #[allow(dead_code)]
     pub fn matches(&self, data: &SampleData) -> bool {
         self.groups.iter().any(|group| {
             group.iter().all(|predicate| {
