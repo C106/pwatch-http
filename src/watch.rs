@@ -8,7 +8,10 @@ use std::sync::{
 };
 use tokio::task::JoinHandle;
 
-pub fn start_driver_watch<F>(config: &WatchConfig, mut on_hit: F) -> anyhow::Result<RunningWatch>
+pub fn start_driver_watch<F>(
+    config: &WatchConfig,
+    mut on_hit: F,
+) -> anyhow::Result<(WatchStart, RunningWatch)>
 where
     F: FnMut(crate::perf::SampleData) + Send + 'static,
 {
@@ -30,56 +33,85 @@ where
     if config.backtrace {
         flags |= lk1337::BP_F_BACKTRACE;
     }
-    let id = driver.create(config.addr, typ, len, config.pid as i32, 256, flags)?;
+    let tids = if config.thread {
+        vec![config.pid]
+    } else {
+        procfs::process::Process::new(config.pid as i32)?
+            .tasks()?
+            .filter_map(Result::ok)
+            .map(|task| task.tid as u32)
+            .collect::<Vec<_>>()
+    };
+    if tids.is_empty() {
+        anyhow::bail!("no threads found for pid {}", config.pid);
+    }
+    let mut breakpoints = Vec::with_capacity(tids.len());
+    for tid in &tids {
+        match driver.create(config.addr, typ, len, *tid as i32, 256, flags) {
+            Ok(id) => breakpoints.push(id),
+            Err(error) => log::warn!("failed to create LK1337 breakpoint tid={tid}: {error}"),
+        }
+    }
+    if breakpoints.is_empty() {
+        anyhow::bail!("no LK1337 breakpoints created for pid {}", config.pid);
+    }
     let cancel = Arc::new(AtomicBool::new(false));
     let thread_cancel = Arc::clone(&cancel);
     let filter = config.filter.clone();
     let thread = std::thread::spawn(move || {
         let mut consecutive_errors = 0u32;
         while !thread_cancel.load(Ordering::Relaxed) {
-            match driver.hits(id) {
-                Ok(hits) => {
-                    consecutive_errors = 0;
-                    for hit in hits {
-                        let mut regs = hit.after.regs.to_vec();
-                        regs.push(hit.after.sp);
-                        regs.push(hit.after.pc);
-                        let count = (hit.bt_count as usize).min(lk1337::BT_MAX);
-                        let backtrace = (count > 0).then(|| hit.backtrace[..count].to_vec());
-                        let data = crate::perf::SampleData {
-                            pid: hit.pid as u32,
-                            tid: hit.tid as u32,
-                            regs,
-                            backtrace,
-                            simd: hit.after.vregs.to_vec(),
-                        };
-                        if filter.as_ref().is_none_or(|filter| filter.matches(&data)) {
-                            on_hit(data);
+            let mut poll_failed = 0usize;
+            for id in &breakpoints {
+                match driver.hits(*id) {
+                    Ok(hits) => {
+                        for hit in hits {
+                            let mut regs = hit.after.regs.to_vec();
+                            regs.push(hit.after.sp);
+                            regs.push(hit.after.pc);
+                            let count = (hit.bt_count as usize).min(lk1337::BT_MAX);
+                            let backtrace = (count > 0).then(|| hit.backtrace[..count].to_vec());
+                            let data = crate::perf::SampleData {
+                                pid: hit.pid as u32,
+                                tid: hit.tid as u32,
+                                regs,
+                                backtrace,
+                                simd: hit.after.vregs.to_vec(),
+                            };
+                            if filter.as_ref().is_none_or(|filter| filter.matches(&data)) {
+                                on_hit(data);
+                            }
                         }
                     }
-                }
-                Err(error) => {
-                    consecutive_errors += 1;
-                    log::error!(
-                        "LK1337 hit polling failed (consecutive={}): {}",
-                        consecutive_errors,
-                        error
-                    );
-                    if consecutive_errors >= 10 {
-                        break;
+                    Err(error) => {
+                        poll_failed += 1;
+                        log::error!("LK1337 hit polling failed id={id}: {error}");
                     }
                 }
             }
+            consecutive_errors = if poll_failed == breakpoints.len() {
+                consecutive_errors + 1
+            } else {
+                0
+            };
+            if consecutive_errors >= 10 {
+                break;
+            }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        let _ = driver.remove(id);
+        for id in breakpoints {
+            let _ = driver.remove(id);
+        }
     });
-    Ok(RunningWatch {
-        cancel,
-        tasks: vec![tokio::task::spawn_blocking(move || {
-            let _ = thread.join();
-        })],
-    })
+    Ok((
+        WatchStart { threads: tids },
+        RunningWatch {
+            cancel,
+            tasks: vec![tokio::task::spawn_blocking(move || {
+                let _ = thread.join();
+            })],
+        },
+    ))
 }
 
 #[allow(dead_code)]
@@ -158,11 +190,5 @@ pub fn start_watch<F>(
 where
     F: FnMut(crate::perf::SampleData) + Send + Clone + 'static,
 {
-    let running = start_driver_watch(&config, handle_event)?;
-    Ok((
-        WatchStart {
-            threads: vec![config.pid],
-        },
-        running,
-    ))
+    start_driver_watch(&config, handle_event)
 }
