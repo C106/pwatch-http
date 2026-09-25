@@ -1,6 +1,5 @@
 use crate::filter::RegFilter;
 use crate::lk1337;
-use log::error;
 use perf_event_open_sys as sys;
 use serde::Serialize;
 use std::sync::{
@@ -36,9 +35,11 @@ where
     let thread_cancel = Arc::clone(&cancel);
     let filter = config.filter.clone();
     let thread = std::thread::spawn(move || {
+        let mut consecutive_errors = 0u32;
         while !thread_cancel.load(Ordering::Relaxed) {
             match driver.hits(id) {
                 Ok(hits) => {
+                    consecutive_errors = 0;
                     for hit in hits {
                         let mut regs = hit.after.regs.to_vec();
                         regs.push(hit.after.sp);
@@ -57,7 +58,17 @@ where
                         }
                     }
                 }
-                Err(error) => log::error!("LK1337 hit polling failed: {}", error),
+                Err(error) => {
+                    consecutive_errors += 1;
+                    log::error!(
+                        "LK1337 hit polling failed (consecutive={}): {}",
+                        consecutive_errors,
+                        error
+                    );
+                    if consecutive_errors >= 10 {
+                        break;
+                    }
+                }
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
@@ -99,16 +110,9 @@ pub struct RunningWatch {
 impl RunningWatch {
     pub async fn stop(self) {
         self.cancel.store(true, Ordering::Relaxed);
-        for task in &self.tasks {
-            task.abort();
-        }
-        for task in self.tasks {
-            match task.await {
-                Ok(()) => {}
-                Err(e) if e.is_cancelled() => {}
-                Err(e) => error!("watch task failed while stopping: {}", e),
-            }
-        }
+        // The driver poll is a blocking ioctl. Detach cleanup so DELETE can
+        // acknowledge cancellation without waiting for an in-flight ioctl.
+        drop(self.tasks);
     }
 }
 

@@ -6,6 +6,7 @@ use std::{net::SocketAddr, time::Duration};
 use watch::WatchConfig;
 
 mod arch;
+mod blocking;
 mod filter;
 mod hit;
 mod lk1337;

@@ -187,8 +187,8 @@ async fn create_breakpoint(
         "create breakpoint requested pid={} type={} addr={}",
         pid, type_name, addr
     );
-    match tokio::task::spawn_blocking(move || create_breakpoint_inner(state, request)).await {
-        Ok(Ok(view)) => {
+    match crate::blocking::run(move || create_breakpoint_inner(state, request)).await {
+        Ok(view) => {
             info!(
                 "created breakpoint id={} pid={} threads={}",
                 view.id,
@@ -197,19 +197,9 @@ async fn create_breakpoint(
             );
             (StatusCode::CREATED, Json(view)).into_response()
         }
-        Ok(Err(e)) => {
+        Err(e) => {
             warn!("create breakpoint failed pid={} addr={}: {}", pid, addr, e);
             error_response(StatusCode::BAD_REQUEST, e.to_string())
-        }
-        Err(e) => {
-            error!(
-                "create breakpoint worker failed pid={} addr={}: {}",
-                pid, addr, e
-            );
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "create breakpoint worker failed",
-            )
         }
     }
 }
@@ -291,7 +281,7 @@ fn create_breakpoint_inner(
 }
 
 async fn list_breakpoints(State(state): State<AppState>) -> impl IntoResponse {
-    match state.inner.breakpoints.lock() {
+    match state.inner.breakpoints.try_lock() {
         Ok(breakpoints) => {
             let mut views = breakpoints
                 .values()
@@ -300,7 +290,10 @@ async fn list_breakpoints(State(state): State<AppState>) -> impl IntoResponse {
             views.sort_by_key(|view| view.id);
             Json(views).into_response()
         }
-        Err(_) => {
+        Err(std::sync::TryLockError::WouldBlock) => {
+            error_response(StatusCode::SERVICE_UNAVAILABLE, "breakpoint state is busy")
+        }
+        Err(std::sync::TryLockError::Poisoned(_)) => {
             error!("breakpoint lock poisoned while listing breakpoints");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -314,9 +307,12 @@ async fn delete_breakpoint(
     State(state): State<AppState>,
     Path(id): Path<u64>,
 ) -> impl IntoResponse {
-    let entry = match state.inner.breakpoints.lock() {
+    let entry = match state.inner.breakpoints.try_lock() {
         Ok(mut breakpoints) => breakpoints.remove(&id),
-        Err(_) => {
+        Err(std::sync::TryLockError::WouldBlock) => {
+            return error_response(StatusCode::SERVICE_UNAVAILABLE, "breakpoint state is busy");
+        }
+        Err(std::sync::TryLockError::Poisoned(_)) => {
             error!(
                 "breakpoint lock poisoned while deleting breakpoint id={}",
                 id
@@ -342,14 +338,17 @@ async fn get_hits(
     State(state): State<AppState>,
     Query(query): Query<HitsQuery>,
 ) -> impl IntoResponse {
-    match state.inner.hit_buffer.lock() {
+    match state.inner.hit_buffer.try_lock() {
         Ok(buffer) => {
             let limit = query.limit.unwrap_or(100);
             let mut hits = buffer.iter().rev().take(limit).cloned().collect::<Vec<_>>();
             hits.reverse();
             Json(hits).into_response()
         }
-        Err(_) => {
+        Err(std::sync::TryLockError::WouldBlock) => {
+            error_response(StatusCode::SERVICE_UNAVAILABLE, "hit buffer is busy")
+        }
+        Err(std::sync::TryLockError::Poisoned(_)) => {
             error!("hit buffer lock poisoned while reading hits");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -377,32 +376,21 @@ async fn stream_hits(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 async fn list_processes(Query(query): Query<ProcessesQuery>) -> impl IntoResponse {
-    match tokio::task::spawn_blocking(move || read_processes(query)).await {
-        Ok(Ok(processes)) => Json(processes).into_response(),
-        Ok(Err(e)) => {
+    match crate::blocking::run(move || read_processes(query)).await {
+        Ok(processes) => Json(processes).into_response(),
+        Err(e) => {
             warn!("list processes failed: {}", e);
             error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        }
-        Err(e) => {
-            error!("list processes worker failed: {}", e);
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "list processes worker failed",
-            )
         }
     }
 }
 
 async fn list_maps(State(state): State<AppState>, Path(pid): Path<u32>) -> impl IntoResponse {
-    match tokio::task::spawn_blocking(move || state.inner.maps.list(pid)).await {
-        Ok(Ok(maps)) => Json(maps).into_response(),
-        Ok(Err(e)) => {
+    match crate::blocking::run(move || state.inner.maps.list(pid)).await {
+        Ok(maps) => Json(maps).into_response(),
+        Err(e) => {
             warn!("list maps failed pid={}: {}", pid, e);
             error_response(StatusCode::BAD_REQUEST, e.to_string())
-        }
-        Err(e) => {
-            error!("list maps worker failed pid={}: {}", pid, e);
-            error_response(StatusCode::INTERNAL_SERVER_ERROR, "list maps worker failed")
         }
     }
 }
@@ -413,19 +401,11 @@ async fn resolve_address(
     Query(query): Query<ResolveQuery>,
 ) -> impl IntoResponse {
     let addr = query.addr;
-    match tokio::task::spawn_blocking(move || state.inner.maps.resolve_expression(pid, &addr)).await
-    {
-        Ok(Ok(resolved)) => Json(resolved).into_response(),
-        Ok(Err(e)) => {
+    match crate::blocking::run(move || state.inner.maps.resolve_expression(pid, &addr)).await {
+        Ok(resolved) => Json(resolved).into_response(),
+        Err(e) => {
             warn!("resolve address failed pid={}: {}", pid, e);
             error_response(StatusCode::BAD_REQUEST, e.to_string())
-        }
-        Err(e) => {
-            error!("resolve address worker failed pid={}: {}", pid, e);
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "resolve address worker failed",
-            )
         }
     }
 }

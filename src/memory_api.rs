@@ -154,15 +154,14 @@ async fn read_memory(query: Result<Query<ReadRequest>, QueryRejection>) -> Respo
         Ok(addr) => addr,
         Err(e) => return error_response(StatusCode::BAD_REQUEST, e),
     };
-    match tokio::task::spawn_blocking(move || {
+    match crate::blocking::run(move || {
         let data = Driver::open()?.read_memory(request.pid as i32, addr, request.size)?;
         Ok::<_, anyhow::Error>(format_read(request.pid, addr, data))
     })
     .await
     {
-        Ok(Ok(body)) => ([(CACHE_CONTROL, "no-store")], Json(body)).into_response(),
-        Ok(Err(e)) => error_response(StatusCode::BAD_GATEWAY, e),
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, e),
+        Ok(body) => ([(CACHE_CONTROL, "no-store")], Json(body)).into_response(),
+        Err(e) => error_response(StatusCode::BAD_GATEWAY, e),
     }
 }
 
@@ -179,7 +178,7 @@ async fn write_memory(body: Result<Json<WriteRequest>, JsonRejection>) -> Respon
         Ok(addr) => addr,
         Err(e) => return error_response(StatusCode::BAD_REQUEST, e),
     };
-    match tokio::task::spawn_blocking(move || {
+    match crate::blocking::run(move || {
         Driver::open()?.write_memory(request.pid as i32, addr, &data)?;
         Ok::<_, anyhow::Error>(WriteResponse {
             pid: request.pid,
@@ -189,9 +188,8 @@ async fn write_memory(body: Result<Json<WriteRequest>, JsonRejection>) -> Respon
     })
     .await
     {
-        Ok(Ok(body)) => ([(CACHE_CONTROL, "no-store")], Json(body)).into_response(),
-        Ok(Err(e)) => error_response(StatusCode::BAD_GATEWAY, e),
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, e),
+        Ok(body) => ([(CACHE_CONTROL, "no-store")], Json(body)).into_response(),
+        Err(e) => error_response(StatusCode::BAD_GATEWAY, e),
     }
 }
 
